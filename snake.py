@@ -4,28 +4,31 @@ from pygame.color import THECOLORS
 
 
 class Snake:
-    def __init__(self):
-        first_pos = tuple(frame[i] + cell_size * (cells[i] // 2) for i in range(2))
+    def __init__(self, position, even, direction):
         self.head_size = cell_size
         self.color = THECOLORS['purple']
         self.head = pygame.draw.rect(screen, self.color,
-                                     pygame.Rect(first_pos[0], first_pos[1], self.head_size, self.head_size))
-        self.direction = "UP"
+                                     pygame.Rect(position[0], position[1], self.head_size, self.head_size))
+        self.direction = direction
         self.directions = {"UP": (0, -cell_size), "DOWN": (0, cell_size),
                            "RIGHT": (cell_size, 0), "LEFT": (-cell_size, 0)}
-        self.even = bool((cells[0] // 2) % 2)
+        self.tailor = None
+        self.even = even
 
     def change_direction(self, direction: str):
         if self.directions[direction][0] == -self.directions[self.direction][0] \
                 and self.directions[direction][1] == -self.directions[self.direction][1]:
             return
+        if self.tailor:
+            self.tailor.change_direction(self.direction)
         self.direction = direction
 
     def move(self):
         # Change previous cell
-        color = cell_colors[0] if self.even else cell_colors[1]
-        pygame.draw.rect(screen, color,
-                         pygame.Rect(self.head.x, self.head.y, self.head_size, self.head_size))
+        if self.tailor is None:
+            color = cell_colors[0] if self.even else cell_colors[1]
+            pygame.draw.rect(screen, color,
+                             pygame.Rect(self.head.x, self.head.y, self.head_size, self.head_size))
         self.even = not self.even
 
         # Move head
@@ -41,7 +44,18 @@ class Snake:
         elif self.head.y >= frame[3]:
             self.head.y = frame[1]
 
-        pygame.draw.rect(screen, self.color, snake.head, 0)
+        pygame.draw.rect(screen, self.color, snake.head)
+
+        if self.tailor:
+            self.tailor.move()
+
+    def add_tailor(self):
+        if self.tailor is None:
+            position = self.directions[self.direction]
+            self.tailor = Snake(self.head.move(-position[0], -position[1]), not self.even, self.direction)
+        else:
+            self.tailor.add_tailor()
+
 
 
 def find_size(window_size: (int, int), rel: float, cells: (int, int)):
@@ -55,7 +69,7 @@ def find_size(window_size: (int, int), rel: float, cells: (int, int)):
 
 
 if __name__ == "__main__":
-    FPS = 5
+    FPS = 3
     size = (1200, 800)
     cells = (18, 12)
     cell_colors = ((171, 216, 80), (163, 210, 71))
@@ -80,14 +94,18 @@ if __name__ == "__main__":
         even = not even
 
     # Init snake
-    snake = Snake()
+    pos = tuple(frame[i] + cell_size * (cells[i] // 2) for i in range(2))
+    even = bool((cells[0] // 2) % 2)
+    snake = Snake(pos, even, "UP")
+
+
     # Run
+    tail = 1
     pygame.display.flip()
     running = True
     while running:
         clock.tick(FPS)
         for event in pygame.event.get():
-            # check for closing window
             if event.type == pygame.QUIT:
                 running = False
 
@@ -102,5 +120,10 @@ if __name__ == "__main__":
                     snake.change_direction("DOWN")
 
         snake.move()
+
+        if tail % 5 == 0:
+            snake.add_tailor()
+
+        tail += 1
 
         pygame.display.update()
