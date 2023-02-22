@@ -18,15 +18,8 @@ def find_size(window_size: (int, int), rel: float, cells: (int, int)):
     return cell_size, *start, *end
 
 
-def find_distance(snake, food, cell_size):
-    snake_pos = snake.head.x // cell_size, snake.head.y // cell_size
-    food_pos = food.pos[0] // cell_size, food.pos[1] // cell_size
-    distance = math.sqrt((snake_pos[0] - food_pos[0]) ** 2 + (snake_pos[1] - food_pos[1]) ** 2)
-    return distance
-
-
 class Game:
-    def __init__(self, FPS=10, size=(1200, 800), cells=(18, 12), cell_colors=((171, 216, 80), (163, 210, 71))):
+    def __init__(self, FPS=5, size=(1200, 800), cells=(18, 12), cell_colors=((171, 216, 80), (163, 210, 71))):
         self.FPS = FPS
         self.size = size
         self.cells = cells
@@ -67,7 +60,7 @@ class Game:
         even = bool((self.cells[0] // 2) % 2)
         self.snake = Snake(self, pos, even, "UP")
         self.food = Food(self, self.frame[0], self.frame[1])
-        self.agent = Agent(ALPHA=0.0005, input_dims=5, GAMMA=0.99,
+        self.agent = Agent(ALPHA=0.0005, input_dims=4, GAMMA=0.99,
                            n_actions=4, layer1_size=64, layer2_size=64)
 
     def restart(self):
@@ -76,10 +69,21 @@ class Game:
         self.run()
 
     def run(self):
-        observation = np.asarray((*self.snake.pos, *self.food.pos, self.snake.body_count))
+        def closer(prev_distance: (int, int), distance: (int, int)):
+            if prev_distance > distance:
+                return True
+            return False
 
-        score = 0
+        def calculate_reward():
+            if self.food.eaten:
+                return 100
+            elif not self.snake.alive:
+                return -10
+            else:
+                return 1 if closer(prev_distance, distance) else -1
 
+        prev_distance = self.find_distance()
+        prev_observation = np.asarray((*self.snake.pos, *self.food.pos))
         running = True
         while running:
             self.clock.tick(self.FPS)
@@ -88,7 +92,7 @@ class Game:
                     running = False
 
             if self.snake.alive:
-                action = self.agent.choose_action(observation)
+                action = self.agent.choose_action(prev_observation)
 
                 self.snake.change_direction(list(self.snake.directions.keys())[action])
 
@@ -96,25 +100,31 @@ class Game:
 
                 self.snake.check_food(self.food)
 
-                observation_2 = np.asarray((*self.snake.pos, *self.food.pos, self.snake.body_count))
+                distance = self.find_distance()
+
+                reward = calculate_reward()
+
+                prev_distance = distance
 
                 if self.food.eaten:
-                    score += 1
+                    self.food = Food(self, self.frame[0], self.frame[1])
 
-                self.agent.store_transition(observation, action, 1)
+                observation = np.asarray((*self.snake.pos, *self.food.pos))
 
-                observation = observation_2
+                self.agent.store_transition(prev_observation, action, reward)
+
+                prev_observation = observation
 
                 self.agent.learn()
 
+                pygame.display.update()
+
             else:
-                while True:
-                    pass
+                self.restart()
+                running = False
 
-            if self.food.eaten:
-                self.food = Food(self.cells, self.cell_size, self.frame[0], self.frame[1])
-
-            pygame.display.update()
+    def find_distance(self):
+        return math.sqrt((self.snake.pos[0] - self.food.pos[0]) ** 2 + (self.snake.pos[1] - self.food.pos[1]) ** 2)
 
 
 if __name__ == "__main__":
