@@ -1,148 +1,95 @@
-import gym
+from keras.layers import Dense, Activation, Input
+from keras.models import Model, load_model
+from keras.optimizers import Adam
+import keras.backend as K
 import numpy as np
-from keras import layers
-from keras.models import Model
-from keras import backend as K
-from keras import utils as np_utils
-from keras import optimizers
+from tensorflow.python.framework.ops import disable_eager_execution
+
+disable_eager_execution()
 
 
 class Agent(object):
+    def __init__(self, ALPHA, GAMMA=0.99, n_actions=4,
+                 layer1_size=16, layer2_size=16, input_dims=128,
+                 fname='reinforce.h5'):
+        self.gamma = GAMMA
+        self.lr = ALPHA
+        self.G = 0
+        self.input_dims = input_dims
+        self.fc1_dims = layer1_size
+        self.fc2_dims = layer2_size
+        self.n_actions = n_actions
+        self.state_memory = []
+        self.action_memory = []
+        self.reward_memory = []
+        self.policy, self.predict = self.build_policy_network()
+        self.action_space = [i for i in range(n_actions)]
 
-    def __init__(self, input_dim, output_dim, hidden_dims=[32, 32]):
-        self.input_dim = input_dim
-        self.output_dim = output_dim
+        self.model_file = fname
 
-        self.__build_network(input_dim, output_dim, hidden_dims)
-        self.__build_train_fn()
+    def build_policy_network(self):
+        input = Input(shape=(self.input_dims,))
+        advantages = Input(shape=[1])
+        dense1 = Dense(self.fc1_dims, activation='relu')(input)
+        dense2 = Dense(self.fc2_dims, activation='relu')(dense1)
+        probs = Dense(self.n_actions, activation='softmax')(dense2)
 
-    def __build_network(self, input_dim, output_dim, hidden_dims=[32, 32]):
-        self.X = layers.Input(shape=(input_dim,))
-        net = self.X
+        def custom_loss(y_true, y_pred):
+            out = K.clip(y_pred, 1e-8, 1-1e-8)
+            log_lik = y_true*K.log(out)
 
-        for h_dim in hidden_dims:
-            net = layers.Dense(h_dim)(net)
-            net = layers.Activation("relu")(net)
+            return K.sum(-log_lik*advantages)
 
-        net = layers.Dense(output_dim)(net)
-        net = layers.Activation("softmax")(net)
+        policy = Model([input, advantages], [probs])
 
-        self.model = Model(inputs=self.X, outputs=net)
+        policy.compile(optimizer=Adam(learning_rate=self.lr), loss=custom_loss)
 
-    def __build_train_fn(self):
-        action_prob_placeholder = self.model.output
-        action_onehot_placeholder = K.placeholder(shape=(None, self.output_dim),
-                                                  name="action_onehot")
-        discount_reward_placeholder = K.placeholder(shape=(None,),
-                                                    name="discount_reward")
+        predict = Model([input], [probs])
 
-        action_prob = K.sum(action_prob_placeholder * action_onehot_placeholder, axis=1)
-        log_action_prob = K.log(action_prob)
+        return policy, predict
 
-        loss = - log_action_prob * discount_reward_placeholder
-        loss = K.mean(loss)
+    def choose_action(self, observation):
+        state = observation[np.newaxis, :]
+        probabilities = self.predict.predict(state)[0]
+        action = np.random.choice(self.action_space, p=probabilities)
 
-        adam = optimizers.Adam()
+        return action
 
-        updates = adam.get_updates(params=self.model.trainable_weights,
-                                   constraints=[],
-                                   loss=loss)
+    def store_transition(self, observation, action, reward):
+        self.state_memory.append(observation)
+        self.action_memory.append(action)
+        self.reward_memory.append(reward)
 
-        self.train_fn = K.function(inputs=[self.model.input,
-                                           action_onehot_placeholder,
-                                           discount_reward_placeholder],
-                                   outputs=[],
-                                   updates=updates)
+    def learn(self):
+        state_memory = np.array(self.state_memory)
+        action_memory = np.array(self.action_memory)
+        reward_memory = np.array(self.reward_memory)
 
-    def get_action(self, state):
-        shape = state.shape
+        actions = np.zeros([len(action_memory), self.n_actions])
+        actions[np.arange(len(action_memory)), action_memory] = 1
 
-        if len(shape) == 1:
-            assert shape == (self.input_dim,), "{} != {}".format(shape, self.input_dim)
-            state = np.expand_dims(state, axis=0)
+        G = np.zeros_like(reward_memory)
+        for t in range(len(reward_memory)):
+            G_sum = 0
+            discount = 1
+            for k in range(t, len(reward_memory)):
+                G_sum += reward_memory[k] * discount
+                discount *= self.gamma
+            G[t] = G_sum
+        mean = np.mean(G)
+        std = np.std(G) if np.std(G) > 0 else 1
+        self.G = (G - mean) / std
 
-        elif len(shape) == 2:
-            assert shape[1] == (self.input_dim), "{} != {}".format(shape, self.input_dim)
+        cost = self.policy.train_on_batch([state_memory, self.G], actions)
 
-        else:
-            raise TypeError("Wrong state shape is given: {}".format(state.shape))
+        self.state_memory = []
+        self.action_memory = []
+        self.reward_memory = []
 
-        action_prob = np.squeeze(self.model.predict(state))
-        assert len(action_prob) == self.output_dim, "{} != {}".format(len(action_prob), self.output_dim)
-        return np.random.choice(np.arange(self.output_dim), p=action_prob)
+        return cost
 
-    def fit(self, S, A, R):
-        action_onehot = np_utils.to_categorical(A, num_classes=self.output_dim)
-        discount_reward = compute_discounted_R(R)
+    def save_model(self):
+        self.policy.save(self.model_file)
 
-        assert S.shape[1] == self.input_dim, "{} != {}".format(S.shape[1], self.input_dim)
-        assert action_onehot.shape[0] == S.shape[0], "{} != {}".format(action_onehot.shape[0], S.shape[0])
-        assert action_onehot.shape[1] == self.output_dim, "{} != {}".format(action_onehot.shape[1], self.output_dim)
-        assert len(discount_reward.shape) == 1, "{} != 1".format(len(discount_reward.shape))
-
-        self.train_fn([S, action_onehot, discount_reward])
-
-
-def compute_discounted_R(R, discount_rate=.99):
-    discounted_r = np.zeros_like(R, dtype=np.float32)
-    running_add = 0
-    for t in reversed(range(len(R))):
-
-        running_add = running_add * discount_rate + R[t]
-        discounted_r[t] = running_add
-
-    discounted_r -= discounted_r.mean() / discounted_r.std()
-
-    return discounted_r
-
-
-def run_episode(env, agent):
-    done = False
-    S = []
-    A = []
-    R = []
-
-    s = env.reset()
-
-    total_reward = 0
-
-    while not done:
-
-        a = agent.get_action(s)
-
-        s2, r, done, info = env.step(a)
-        total_reward += r
-
-        S.append(s)
-        A.append(a)
-        R.append(r)
-
-        s = s2
-
-        if done:
-            S = np.array(S)
-            A = np.array(A)
-            R = np.array(R)
-
-            agent.fit(S, A, R)
-
-    return total_reward
-
-
-def main():
-    try:
-        env = gym.make("CartPole-v1")
-        input_dim = env.observation_space.shape[0]
-        output_dim = env.action_space.n
-        agent = Agent(input_dim, output_dim, [16, 16])
-
-        for episode in range(2000):
-            reward = run_episode(env, agent)
-            print(episode, reward)
-
-    finally:
-        env.close()
-
-
-if __name__ == '__main__':
-    main()
+    def load_model(self):
+        self.policy = load_model(self.model_file)
