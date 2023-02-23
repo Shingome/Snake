@@ -1,10 +1,11 @@
+import numpy as np
 import pygame
 from pygame.color import THECOLORS
 from food import Food
 
 
 class Snake:
-    def __init__(self, game, position: (int, int), even: bool, direction: str, color=THECOLORS['purple']):
+    def __init__(self, game, position: (int, int), direction: str, color=THECOLORS['purple']):
         self.game = game
         self.color = color
         self.head = pygame.draw.rect(self.game.screen, self.color,
@@ -15,7 +16,6 @@ class Snake:
                            "RIGHT": (self.game.cell_size, 0), "LEFT": (-self.game.cell_size, 0)}
         self.body = [position]
         self.body_count = 1
-        self.even = even
         self.alive = True
 
     def change_direction(self, direction: str):
@@ -27,25 +27,67 @@ class Snake:
     def move(self):
         self.head.move_ip(self.directions[self.direction])
         self.pos = [self.head.x, self.head.y]
-        self.check_borders()
-        self.change_body()
-        self.check_death()
-
-    def check_borders(self):
-        if self.pos[0] <= self.game.frame[0] \
-                or self.pos[0] >= self.game.frame[2] - self.game.cell_size \
-                or self.pos[1] <= self.game.frame[1] \
-                or self.pos[1] >= self.game.frame[3] - self.game.cell_size:
+        if self.check_death(self.pos):
             self.death()
+            return
+        self.change_body()
+
+    def check_death(self, pos):
+        def check_borders(pos):
+            if pos[0] <= self.game.frame[0] - self.game.cell_size \
+                    or pos[0] >= self.game.frame[2] \
+                    or pos[1] <= self.game.frame[1] - self.game.cell_size \
+                    or pos[1] >= self.game.frame[3]:
+                return True
+            return False
+
+        def check_body():
+            for i in self.body[:len(self.body) - 1]:
+                if self.pos[0] == i[0] and self.pos[1] == i[1]:
+                    return True
+            return False
+
+        if check_borders(pos) or check_body():
+            return True
+
+        return False
+
+    def get_observation(self, food: Food):
+        def get_direction():
+            direction_array = np.zeros((4, ))
+            direction = list(self.directions.keys()).index(self.direction)
+            direction_array[direction] = 1
+            return direction_array
+
+        def get_food(food: Food):
+            direction_array = np.zeros((4,))
+            if food.pos[1] < self.pos[1]:
+                direction_array[0] = 1
+            else:
+                direction_array[1] = 1
+
+            if food.pos[0] > self.pos[0]:
+                direction_array[2] = 1
+            else:
+                direction_array[3] = 1
+            return direction_array
+
+        def get_obstancle():
+            def check_obstacle(direction):
+                head = self.head.move(self.directions[direction])
+                next_pos = (head.x, head.y)
+                if self.check_death(next_pos):
+                    return 1
+                return 0
+
+            return (check_obstacle(dir) for dir in self.directions)
+
+        return np.asarray((*get_food(food), *get_direction(), *get_obstancle()))
 
     def change_body(self):
         self.body.append(tuple(self.pos))
 
         if len(self.body) > self.body_count:
-            color = self.game.cell_colors[0] if self.even else self.game.cell_colors[1]
-            pygame.draw.rect(self.game.screen, color,
-                             pygame.Rect(self.body[0][0], self.body[0][1], self.game.cell_size, self.game.cell_size))
-            self.even = not self.even
             self.body.pop(0)
 
         for i in self.body:
@@ -56,11 +98,6 @@ class Snake:
         if (self.pos[0], self.pos[1]) == food.pos:
             self.add_tailor()
             food.eaten = True
-
-    def check_death(self):
-        for i in self.body[:len(self.body) - 1]:
-            if self.pos[0] == i[0] and self.pos[1] == i[1]:
-                self.death()
 
     def add_tailor(self):
         self.body_count += 1
