@@ -1,6 +1,6 @@
 import pygame
 from pygame.color import THECOLORS
-from  food import Food
+from food import Food
 
 
 class Snake:
@@ -32,15 +32,11 @@ class Snake:
         self.check_death()
 
     def check_borders(self):
-        if self.pos[0] <= self.game.frame[0] - self.game.cell_size:
-            self.pos[0] = self.game.frame[2] - self.game.cell_size
-        elif self.pos[0] >= self.game.frame[2]:
-            self.pos[0] = self.game.frame[0]
-        elif self.pos[1] <= self.game.frame[1] - self.game.cell_size:
-            self.pos[1] = self.game.frame[3] - self.game.cell_size
-        elif self.pos[1] >= self.game.frame[3]:
-            self.pos[1] = self.game.frame[1]
-        self.head.x, self.head.y = self.pos
+        if self.pos[0] <= self.game.frame[0] \
+                or self.pos[0] >= self.game.frame[2] - self.game.cell_size \
+                or self.pos[1] <= self.game.frame[1] \
+                or self.pos[1] >= self.game.frame[3] - self.game.cell_size:
+            self.death()
 
     def change_body(self):
         self.body.append(tuple(self.pos))
@@ -54,7 +50,7 @@ class Snake:
 
         for i in self.body:
             pygame.draw.rect(self.game.screen, self.color, pygame.Rect(i[0], i[1],
-                             self.game.cell_size, self.game.cell_size))
+                                                                       self.game.cell_size, self.game.cell_size))
 
     def check_food(self, food: Food):
         if (self.pos[0], self.pos[1]) == food.pos:
@@ -72,5 +68,5 @@ class Snake:
     def death(self):
         for i in self.body:
             pygame.draw.rect(self.game.screen, THECOLORS['red'], pygame.Rect(i[0], i[1],
-                             self.game.cell_size, self.game.cell_size))
+                                                                             self.game.cell_size, self.game.cell_size))
         self.alive = False
