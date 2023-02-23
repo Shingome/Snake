@@ -10,8 +10,8 @@ class Food:
                     y_start + self.game.cell_size * rd.choice(range(self.game.cells[1])))
         self.color = color
         self.eaten = False
-        self.draw_food(self.game.cell_size)
+        self.draw_food()
 
-    def draw_food(self, cell_size):
+    def draw_food(self):
         pygame.draw.rect(self.game.screen, self.color,
-                         pygame.Rect(self.pos[0], self.pos[1], cell_size, cell_size))
+                         pygame.Rect(self.pos[0], self.pos[1], self.game.cell_size, self.game.cell_size))

@@ -4,7 +4,8 @@ from  food import Food
 
 
 class Snake:
-    def __init__(self, game, position: (int, int), even: bool, direction: str, color=THECOLORS['purple']):
+    def __init__(self, game, position: (int, int), direction: str, hp=50, color=THECOLORS['purple']):
+        self.hp = [hp, hp]
         self.game = game
         self.color = color
         self.head = pygame.draw.rect(self.game.screen, self.color,
@@ -15,7 +16,6 @@ class Snake:
                            "RIGHT": (self.game.cell_size, 0), "LEFT": (-self.game.cell_size, 0)}
         self.body = [position]
         self.body_count = 1
-        self.even = even
         self.alive = True
 
     def change_direction(self, direction: str):
@@ -27,9 +27,19 @@ class Snake:
     def move(self):
         self.head.move_ip(self.directions[self.direction])
         self.pos = [self.head.x, self.head.y]
+        self.hp[0] -= 1
+        self.check_hp()
         self.check_borders()
         self.change_body()
         self.check_death()
+
+    def check_hp(self):
+        if self.hp[0] == 0 and self.body_count == 1:
+            self.death()
+        elif self.hp[0] == 0 and self.body_count > 1:
+            self.body_count -= 1
+            self.hp[0] = self.hp[1]
+            self.body.pop(0)
 
     def check_borders(self):
         if self.pos[0] <= self.game.frame[0] - self.game.cell_size:
@@ -46,10 +56,6 @@ class Snake:
         self.body.append(tuple(self.pos))
 
         if len(self.body) > self.body_count:
-            color = self.game.cell_colors[0] if self.even else self.game.cell_colors[1]
-            pygame.draw.rect(self.game.screen, color,
-                             pygame.Rect(self.body[0][0], self.body[0][1], self.game.cell_size, self.game.cell_size))
-            self.even = not self.even
             self.body.pop(0)
 
         for i in self.body:
@@ -58,6 +64,7 @@ class Snake:
 
     def check_food(self, food: Food):
         if (self.pos[0], self.pos[1]) == food.pos:
+            self.hp[0] = self.hp[1]
             self.add_tailor()
             food.eaten = True
 
