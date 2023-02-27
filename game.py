@@ -19,7 +19,7 @@ def find_size(window_size: (int, int), rel: float, cells: (int, int)):
 
 
 class Game:
-    def __init__(self, FPS=5, size=(1200, 800), cells=(18, 12), cell_colors=((171, 216, 80), (163, 210, 71))):
+    def __init__(self, FPS=50, size=(1200, 800), cells=(18, 12), cell_colors=((171, 216, 80), (163, 210, 71))):
         self.FPS = FPS
         self.size = size
         self.cells = cells
@@ -33,7 +33,6 @@ class Game:
         self.snake = None
         self.food = None
         self.agent = None
-        self.init_screen()
         self.start()
 
     def init_screen(self):
@@ -61,8 +60,8 @@ class Game:
         pos = tuple(self.frame[i] + self.cell_size * (self.cells[i] // 2) for i in range(2))
         self.snake = Snake(self, pos, "UP")
         self.food = Food(self, self.frame[0], self.frame[1])
-        self.agent = Agent(ALPHA=0.0005, input_dims=12, GAMMA=0.99,
-                           n_actions=4, layer1_size=64, layer2_size=64)
+        self.agent = Agent(ALPHA=0.5, input_dims=12, GAMMA=0.99,
+                           n_actions=4, layer1_size=16, layer2_size=32)
 
     def restart(self):
         self.fill_screen()
@@ -70,6 +69,7 @@ class Game:
         self.run()
 
     def start(self):
+        self.init_screen()
         while self.running:
             self.restart()
             print(self.epoch)
@@ -100,8 +100,6 @@ class Game:
             if self.snake.alive:
                 observation = self.snake.get_observation(self.food)
 
-                print(observation[:4], observation[4:8], observation[8:])
-
                 action = self.agent.choose_action(observation)
 
                 self.snake.change_direction(list(self.snake.directions.keys())[action])
@@ -118,11 +116,11 @@ class Game:
                     self.food = Food(self, self.frame[0], self.frame[1])
 
                 self.agent.store_transition(observation, action, reward)
-                self.agent.learn()
 
                 pygame.display.update()
 
             else:
+                self.agent.learn()
                 self.epoch += 1
                 running = False
 

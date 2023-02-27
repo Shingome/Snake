@@ -15,13 +15,10 @@ class Snake:
         self.directions = {"UP": (0, -self.game.cell_size), "DOWN": (0, self.game.cell_size),
                            "RIGHT": (self.game.cell_size, 0), "LEFT": (-self.game.cell_size, 0)}
         self.body = [position]
-        self.body_count = 1
+        self.body_count = 2
         self.alive = True
 
     def change_direction(self, direction: str):
-        if self.directions[direction][0] == -self.directions[self.direction][0] \
-                and self.directions[direction][1] == -self.directions[self.direction][1]:
-            return
         self.direction = direction
 
     def move(self):
@@ -32,18 +29,17 @@ class Snake:
             return
         self.change_body()
 
-    def check_death(self, pos):
-        def check_borders(pos):
-            if pos[0] <= self.game.frame[0] - self.game.cell_size \
-                    or pos[0] >= self.game.frame[2] \
-                    or pos[1] <= self.game.frame[1] - self.game.cell_size \
-                    or pos[1] >= self.game.frame[3]:
+    def check_death(self, pos) -> bool:
+        def check_borders(pos) -> bool:
+            x_snake, y_snake = pos[0] // self.game.cell_size, pos[1] // self.game.cell_size
+            x_border, y_border = self.game.cells
+            if x_snake in (x_border, -1) or y_snake in (y_border, -1):
                 return True
             return False
 
-        def check_body():
+        def check_body() -> bool:
             for i in self.body[:len(self.body) - 1]:
-                if self.pos[0] == i[0] and self.pos[1] == i[1]:
+                if pos[0] == i[0] and pos[1] == i[1]:
                     return True
             return False
 
@@ -52,28 +48,28 @@ class Snake:
 
         return False
 
-    def get_observation(self, food: Food):
-        def get_direction():
+    def get_observation(self, food: Food) -> np.array:
+        def get_direction() -> np.array:
             direction_array = np.zeros((4, ))
             direction = list(self.directions.keys()).index(self.direction)
             direction_array[direction] = 1
             return direction_array
 
-        def get_food(food: Food):
+        def get_food(food: Food) -> np.array:
             direction_array = np.zeros((4,))
             if food.pos[1] < self.pos[1]:
                 direction_array[0] = 1
-            else:
+            elif food.pos[1] > self.pos[1]:
                 direction_array[1] = 1
 
             if food.pos[0] > self.pos[0]:
                 direction_array[2] = 1
-            else:
+            elif food.pos[0] < self.pos[00]:
                 direction_array[3] = 1
             return direction_array
 
         def get_obstancle():
-            def check_obstacle(direction):
+            def check_obstacle(direction) -> int:
                 head = self.head.move(self.directions[direction])
                 next_pos = (head.x, head.y)
                 if self.check_death(next_pos):
@@ -92,7 +88,7 @@ class Snake:
 
         for i in self.body:
             pygame.draw.rect(self.game.screen, self.color, pygame.Rect(i[0], i[1],
-                                                                       self.game.cell_size, self.game.cell_size))
+                             self.game.cell_size, self.game.cell_size))
 
     def check_food(self, food: Food):
         if (self.pos[0], self.pos[1]) == food.pos:
@@ -105,5 +101,5 @@ class Snake:
     def death(self):
         for i in self.body:
             pygame.draw.rect(self.game.screen, THECOLORS['red'], pygame.Rect(i[0], i[1],
-                                                                             self.game.cell_size, self.game.cell_size))
+                             self.game.cell_size, self.game.cell_size))
         self.alive = False
