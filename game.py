@@ -60,8 +60,8 @@ class Game:
         pos = tuple(self.frame[i] + self.cell_size * (self.cells[i] // 2) for i in range(2))
         self.snake = Snake(self, pos, "UP")
         self.food = Food(self, self.frame[0], self.frame[1])
-        self.agent = Agent(ALPHA=0.5, input_dims=12, GAMMA=0.99,
-                           n_actions=4, layer1_size=16, layer2_size=32)
+        self.agent = Agent(ALPHA=0.0005, input_dims=12, GAMMA=0.99,
+                           n_actions=4, layer1_size=64, layer2_size=64)
 
     def restart(self):
         self.fill_screen()
@@ -74,7 +74,7 @@ class Game:
             self.restart()
             print(self.epoch)
 
-    def run(self):
+    def play(self, direction):
         def closer(prev_distance: (int, int), distance: (int, int)):
             if prev_distance > distance:
                 return True
@@ -88,41 +88,59 @@ class Game:
             else:
                 return 1 if closer(prev_distance, distance) else -1
 
-        prev_distance = self.find_distance()
-        running = True
-        while running:
+        done = True
+
+        observation = self.snake.get_observation(self.food)
+
+        action = direction
+
+        self.snake.change_direction(list(self.snake.directions.keys())[action])
+
+        self.fill_screen()
+        self.snake.move()
+        self.food.draw_food()
+
+        self.snake.check_food(self.food)
+
+        if self.food.eaten:
+            self.food = Food(self, self.frame[0], self.frame[1])
+
+        new_distance = self.find_distance()
+        reward = calculate_reward(self.snake.distance, new_distance)
+        self.snake.distance = new_distance
+
+        new_observation = self.snake.get_observation(self.food)
+
+        if not self.snake.alive:
+            done = False
+
+        return observation, action, reward, new_observation, done
+
+    def run(self):
+        self.snake.distance = self.find_distance()
+        observation = self.snake.get_observation(self.food)
+        done = True
+        while done:
             self.clock.tick(self.FPS)
+
+            action = self.agent.choose_action(observation)
+
+            observation, action, reward, next_observation, done = self.play(action)
+
+            self.agent.store_transition(observation, action, reward)
+
+            observation = next_observation
+
+            pygame.display.update()
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.running = False
-                    running = False
+                    done = False
 
-            if self.snake.alive:
-                observation = self.snake.get_observation(self.food)
-
-                action = self.agent.choose_action(observation)
-
-                self.snake.change_direction(list(self.snake.directions.keys())[action])
-                self.fill_screen()
-                self.food.draw_food()
-                self.snake.move()
-                self.snake.check_food(self.food)
-
-                distance = self.find_distance()
-                reward = calculate_reward(prev_distance, distance)
-                prev_distance = distance
-
-                if self.food.eaten:
-                    self.food = Food(self, self.frame[0], self.frame[1])
-
-                self.agent.store_transition(observation, action, reward)
-
-                pygame.display.update()
-
-            else:
+            if not done:
                 self.agent.learn()
                 self.epoch += 1
-                running = False
 
     def find_distance(self):
         return math.sqrt((self.snake.pos[0] - self.food.pos[0]) ** 2 + (self.snake.pos[1] - self.food.pos[1]) ** 2)

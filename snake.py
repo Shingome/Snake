@@ -15,7 +15,8 @@ class Snake:
         self.directions = {"UP": (0, -self.game.cell_size), "DOWN": (0, self.game.cell_size),
                            "RIGHT": (self.game.cell_size, 0), "LEFT": (-self.game.cell_size, 0)}
         self.body = [position]
-        self.body_count = 2
+        self.body_count = 1
+        self.distance = None
         self.alive = True
 
     def change_direction(self, direction: str):

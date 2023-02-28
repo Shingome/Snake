@@ -3,10 +3,10 @@ from keras.models import Model, load_model
 from keras.optimizers import Adam
 import keras.backend as K
 import numpy as np
+import tensorflow as tf
 from tensorflow.python.framework.ops import disable_eager_execution
 
 disable_eager_execution()
-
 
 class Agent(object):
     def __init__(self, ALPHA, GAMMA=0.99, n_actions=4,
